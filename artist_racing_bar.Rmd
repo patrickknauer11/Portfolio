@@ -1,0 +1,129 @@
+---
+title: ""
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(jsonlite)
+library(rjson)
+library(jsonlite)
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(gganimate)
+library(padr)
+```
+
+```{r reading in data and converting json into data frames}
+
+json0 <- "~/Documents/MyData/endsong_0.json"
+df0 <- as.data.frame(jsonlite::fromJSON(txt = json0))
+
+json1 <- "~/Documents/MyData/endsong_1.json"
+df1 <- as.data.frame(jsonlite::fromJSON(txt = json1))
+
+json2 <- "~/Documents/MyData/endsong_2.json"
+df2 <- as.data.frame(jsonlite::fromJSON(txt = json2))
+
+json3 <- "~/Documents/MyData/endsong_3.json"
+df3 <- as.data.frame(jsonlite::fromJSON(txt = json3))
+
+json4 <- "~/Documents/MyData/endsong_4.json"
+df4 <- as.data.frame(jsonlite::fromJSON(txt = json4))
+
+json5 <- "~/Documents/MyData/endsong_5.json"
+df5 <- as.data.frame(jsonlite::fromJSON(txt = json5))
+
+json6 <- "~/Documents/MyData/endsong_6.json"
+df6 <- as.data.frame(jsonlite::fromJSON(txt = json6))
+
+json7 <- "~/Documents/MyData/endsong_7.json"
+df7 <- as.data.frame(jsonlite::fromJSON(txt = json7))
+
+json8 <- "~/Documents/MyData/endsong_8.json"
+df8 <- as.data.frame(jsonlite::fromJSON(txt = json8))
+
+json9 <- "~/Documents/MyData/endsong_9.json"
+df9 <- as.data.frame(jsonlite::fromJSON(txt = json9))
+```
+ 
+
+```{r merging data frames, selecting columns, and extracting data from time}
+
+masterdf <- rbind(df0, df1, df2, df3, df4, df5, df6, df7, df8, df9) %>% 
+  select(c(1, 4, 5, 8, 9, 10, 11, 15, 16)) %>% 
+  mutate(ts = as.Date(ts %>% 
+           substr(1, 10))) %>% 
+  rename("date" = "ts") %>% 
+  rename("country" = "conn_country") %>% 
+  rename("track_name" = "master_metadata_track_name") %>% 
+  rename("artist" = "master_metadata_album_artist_name") %>% 
+  rename("album" = "master_metadata_album_album_name") %>% 
+  rename("track_id" = "spotify_track_uri") %>% 
+  drop_na()
+
+x <- masterdf %>% 
+  select(1,4,5,7) %>% 
+  filter(artist != "The Lumineers",
+         artist != "Hozier",
+         artist != "Catfish and the Bottlemen",
+         artist != "Mumford & Sons",
+         artist != "Margot & The Nuclear So And So's",
+         artist != "Edward Sharpe & The Magnetic Zeros") %>% 
+  arrange(date) %>% 
+  mutate(count = 1) %>% 
+  group_by(artist) %>% 
+  mutate(running_count = cumsum(count)) %>%
+  complete(date = seq.Date(min(date), as.Date("2022-03-02"), by = "day"), track_id) %>%
+  fill(running_count, .direction = "down") %>% 
+  ungroup() %>% 
+  group_by(date, artist) %>% 
+  drop_na(running_count) %>% 
+  distinct(date, .keep_all = TRUE) %>% 
+  ungroup() %>% 
+  group_by(date) %>% 
+  arrange(date, -running_count) %>% 
+  mutate(rank = 1:n()) %>% 
+  filter(rank <= 10)
+  
+```
+
+```{r plot}
+p <- ggplot(x, aes(rank)) + geom_tile(aes(y = running_count / 2, height = running_count, width = 0.9, fill = as.factor(artist)), alpha = 0.8, color = NA) + 
+      coord_flip(clip = "off", expand = FALSE) + 
+      geom_text(aes(y = 0, label = paste(artist, " "), size = 5, 
+                vjust = 0.2, hjust = 1)) + 
+      geom_text(aes(y = running_count, label = paste(" ", running_count), hjust = 0)) +
+      scale_x_reverse() + 
+      labs(title = 'Favorite Artist by Track Plays', 
+           caption ='{round(frame_time,0)}') +
+      transition_time(date) + ease_aes("cubic-in-out") +
+      theme(axis.line=element_blank(), 
+            axis.text.x=element_blank(), 
+            axis.text.y=element_blank(), 
+            axis.ticks=element_blank(), 
+            axis.title.x=element_blank(), 
+            axis.title.y=element_blank(),
+      legend.position="none",
+      panel.background=element_blank(),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      panel.grid.major.x = element_line( size=.1, color="white" ),
+      panel.grid.minor.x = element_line( size=.1, color="white" ),
+      plot.title=element_text(size=16, hjust=0.5, face="bold",  colour="black", vjust= 3),
+      plot.subtitle=element_text(size=10, hjust=0.5, face="italic",color="black"),
+      plot.caption =element_text(size= 16, hjust = 1, face= "italic", color="black"),
+      plot.background=element_blank(),
+      plot.margin = margin(2, 2, 2, 6, "cm"))
+
+#Setting animation parameters
+final <- animate(p, nframes = 750, fps = 25, end_pause = 100, width = 800, height = 500)
+
+final
+```
+
